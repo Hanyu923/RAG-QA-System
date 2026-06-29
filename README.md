@@ -2,6 +2,8 @@
 
 基于 Spring Boot + 通义千问 的 RAG 问答系统。用户提问后从本地知识库检索相关内容，让 AI 基于真实资料回答。
 
+![运行截图](./screenshot.jpeg)
+
 ## 技术栈
 
 - Java 17 + Spring Boot
@@ -10,7 +12,7 @@
 
 ## 快速启动
 
-1. 在 ChatController.java 中填入你的阿里云 API Key
+1. 在 application.properties 中填入你的阿里云 API Key（aliyun.api.key=你的Key）
 2. 运行 RagQaSystemApplication.java
 3. 浏览器打开 http://localhost:8080/index.html
 
