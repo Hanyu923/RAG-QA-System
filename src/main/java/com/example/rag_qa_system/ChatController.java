@@ -1,65 +1,102 @@
 package com.example.rag_qa_system;
 
-  import com.fasterxml.jackson.databind.JsonNode;
-  import com.fasterxml.jackson.databind.ObjectMapper;
-  import org.springframework.beans.factory.annotation.Value;
-  import org.springframework.web.bind.annotation.*;
-  import org.springframework.web.client.RestTemplate;
-  import org.springframework.http.*;
-  import java.util.*;
+import jakarta.annotation.Resource;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-  @RestController
-  public class ChatController {
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-      @Value("${aliyun.api.key}")
-      private String apiKey;
+@RestController
+public class ChatController {
 
-      private static final String API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    @Resource
+    private ChatClient.Builder chatClientBuilder;
 
-      private final DocumentSearchService docService;
+    @Resource
+    private AgentTools agentTools;
 
-      public ChatController(DocumentSearchService docService) {
-          this.docService = docService;
-      }
+    @Resource(name = "stringRedisTemplate")
+    private StringRedisTemplate redisTemplate;
 
-      @PostMapping("/chat")
-      public String chat(@RequestBody Map<String, String> request) {
-          RestTemplate restTemplate = new RestTemplate();
+    private final DocumentSearchService docService;
 
-          HttpHeaders headers = new HttpHeaders();
-          headers.setContentType(MediaType.APPLICATION_JSON);
-          headers.set("Authorization", "Bearer " + apiKey);
+    public ChatController(DocumentSearchService docService) {
+        this.docService = docService;
+    }
 
-          String question = request.get("question");
-          String relevantDocs = docService.findRelevantContent(question);
+    @PostMapping("/chat")
+    public String chat(@RequestBody Map<String, String> request) {
+        String question = request.get("question");
 
-          Map<String, Object> requestBody = new HashMap<>();
-          requestBody.put("model", "qwen-turbo");
+        String cached = redisTemplate.opsForValue().get("chat:" + question);
+        if (cached != null) {
+            return cached;
+        }
 
-          List<Map<String, String>> messages = new ArrayList<>();
+        String relevantDocs = docService.findRelevantContent(question);
 
-          Map<String, String> systemMessage = new HashMap<>();
-          systemMessage.put("role", "system");
-          systemMessage.put("content","你是一个知识库助手。请根据以下资料回答问题。如果资料中没有答案，就说我暂时没有找到相关信息，不要瞎编。\n\n【资料】\n"+ relevantDocs);
-          messages.add(systemMessage);
+        String systemPrompt = "你是一个知识库助手。请根据以下资料回答问题。"
+                + "如果资料中没有答案，就说我暂时没有找到相关信息，不要瞎编。"
+                + "\n\n【资料】\n" + relevantDocs;
 
-          Map<String, String> userMessage = new HashMap<>();
-          userMessage.put("role", "user");
-          userMessage.put("content", question);
-          messages.add(userMessage);
+        Prompt prompt = new Prompt(List.of(
+                new SystemMessage(systemPrompt),
+                new UserMessage(question)
+        ));
+        String answer = chatClientBuilder
+                .defaultTools(agentTools)
+                .build()
+                .prompt(prompt)
+                .call()
+                .content();
 
-          requestBody.put("messages", messages);
+        if (answer == null) answer = "抱歉，暂时无法回答。";
 
-          HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-          ResponseEntity<String> response = restTemplate.postForEntity(API_URL, entity, String.class);
+        redisTemplate.opsForValue().set("chat:" + question, answer, 1, TimeUnit.HOURS);
 
-          try {
-              ObjectMapper mapper = new ObjectMapper();
-              JsonNode root = mapper.readTree(response.getBody());
-              String answer = root.path("choices").get(0).path("message").path("content").asText();
-              return answer;
-          } catch (Exception e) {
-              return "解析回复出错: " + e.getMessage();
-          }
-      }
-  }
+        return answer;
+    }
+
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(@RequestBody Map<String, String> request) {
+        String question = request.get("question");
+        String relevantDocs = docService.findRelevantContent(question);
+
+        String systemPrompt = "你是一个知识库助手。请根据以下资料回答问题。"
+                + "如果资料中没有答案，就说我暂时没有找到相关信息，不要瞎编。"
+                + "\n\n【资料】\n" + relevantDocs;
+
+        Prompt prompt = new Prompt(List.of(
+                new SystemMessage(systemPrompt),
+                new UserMessage(question)
+        ));
+
+        SseEmitter emitter = new SseEmitter(0L);
+
+        chatClientBuilder.build()
+                .prompt(prompt)
+                .stream()
+                .content()
+                .subscribe(
+                        content -> {
+                            try {
+                                emitter.send(SseEmitter.event().data(content));
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        },
+                        error -> emitter.completeWithError(error),
+                        () -> emitter.complete()
+                );
+
+        return emitter;
+    }
+}

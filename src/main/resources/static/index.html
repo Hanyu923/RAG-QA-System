@@ -1,50 +1,155 @@
 <!DOCTYPE html>
-  <html lang="zh">
-  <head>
-      <meta charset="UTF-8">
-      <title>AI智能助手</title>
-      <style>
-          body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-          #chatBox { border: 1px solid #ddd; height: 300px; overflow-y: auto; padding: 15px; margin-bottom: 15px;
-  border-radius: 8px; background: #fafafa; }
-          .user { color: #0066cc; margin-bottom: 10px; }
-          .ai { color: #333; background: #e8f5e9; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; display:
-  inline-block; }
-          input { width: 70%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-          button { padding: 10px 20px; border: none; background: #0066cc; color: white; border-radius: 6px; cursor:
-  pointer; }
-      </style>
-  </head>
-  <body>
-  <h2>我的AI助手</h2>
-  <div id="chatBox"></div>
-  <input type="text" id="question" placeholder="输入你的问题..." />
-  <button onclick="ask()">发送</button>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>RAG 智能问答系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 30px auto; padding: 20px; }
 
-  <script>
-      function ask() {
-          var q = document.getElementById("question").value;
-          if (!q) return;
+        /* 标签页 */
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #0066cc; }
+        .tab { padding: 10px 24px; cursor: pointer; border: none; background: #f0f0f0; font-size: 15px; border-radius: 6px 6px 0 0; }
+        .tab.active { background: #0066cc; color: white; }
+        .tab:hover { background: #ddd; }
+        .tab.active:hover { background: #0066cc; }
 
-          document.getElementById("chatBox").innerHTML += '<div class="user">你：' + q + '</div>';
-          document.getElementById("question").value = '';
-          document.getElementById("chatBox").innerHTML += '<div class="ai">AI：思考中...</div>';
+        /* 聊天区 */
+        #chatBox { border: 1px solid #ddd; height: 350px; overflow-y: auto; padding: 15px; margin-bottom: 15px; border-radius: 8px; background: #fafafa; }
+        .msg-user { color: #0066cc; margin-bottom: 8px; text-align: right; }
+        .msg-ai { color: #333; background: #e8f5e9; padding: 8px 14px; border-radius: 8px; margin-bottom: 8px; display: inline-block; max-width: 85%; }
+        .input-row { display: flex; gap: 10px; }
+        .input-row input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .input-row button { padding: 10px 24px; border: none; background: #0066cc; color: white; border-radius: 6px; cursor: pointer; font-size: 14px; }
 
-          fetch("/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ question: q })
-          })
-          .then(res => res.text())
-          .then(text => {
-              var lastAi = document.querySelectorAll(".ai");
-              lastAi[lastAi.length-1].innerHTML = "AI：" + text;
-          })
-          .catch(err => {
-              var lastAi = document.querySelectorAll(".ai");
-              lastAi[lastAi.length-1].innerHTML = "AI：出错了，请确认后端已启动。";
-          });
-      }
-  </script>
-  </body>
-  </html>
+        /* 知识库管理 */
+        #knowledgeBox { display: none; }
+        .knowledge-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 6px; }
+        .knowledge-item .text { flex: 1; }
+        .knowledge-item .del-btn { background: #ff4444; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+        .knowledge-list { height: 350px; overflow-y: auto; margin-bottom: 15px; }
+        .add-row { display: flex; gap: 10px; }
+        .add-row input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .add-row button { padding: 10px 24px; border: none; background: #28a745; color: white; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .info { font-size: 13px; color: #888; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="tabs">
+    <button class="tab active" onclick="switchTab('chat')">💬 AI对话</button>
+    <button class="tab" onclick="switchTab('knowledge')">📚 知识库管理</button>
+</div>
+
+<!-- 聊天面板 -->
+<div id="chatBox">
+    <div class="msg-ai">AI：你好！请输入你的问题。</div>
+</div>
+<div class="input-row">
+    <input type="text" id="question" placeholder="输入你的问题..." onkeydown="if(event.key==='Enter')ask()" />
+    <button onclick="ask()">发送</button>
+</div>
+
+<!-- 知识库管理面板 -->
+<div id="knowledgeBox">
+    <div class="info">知识库共 <span id="countDisplay">0</span> 条（添加后需重启服务才能更新检索）</div>
+    <div class="knowledge-list" id="knowledgeList"></div>
+    <div class="add-row">
+        <input type="text" id="newKnowledge" placeholder="输入新知识内容..." onkeydown="if(event.key==='Enter')addKnowledge()" />
+        <button onclick="addKnowledge()">添加</button>
+    </div>
+</div>
+
+<script>
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        if (tab === 'chat') {
+            document.querySelector('.tab:nth-child(1)').classList.add('active');
+            document.getElementById('chatBox').style.display = 'block';
+            document.getElementById('knowledgeBox').style.display = 'none';
+        } else {
+            document.querySelector('.tab:nth-child(2)').classList.add('active');
+            document.getElementById('chatBox').style.display = 'none';
+            document.getElementById('knowledgeBox').style.display = 'block';
+            loadKnowledge();
+        }
+    }
+
+    // ===== AI 对话 =====
+    var eventSource = null;
+    function ask() {
+        var q = document.getElementById('question').value;
+        if (!q) return;
+        document.getElementById('chatBox').innerHTML += '<div class="msg-user">你：' + q + '</div>';
+        document.getElementById('question').value = '';
+        var msgDiv = document.createElement('div');
+        msgDiv.className = 'msg-ai';
+        msgDiv.innerHTML = 'AI：';
+        document.getElementById('chatBox').appendChild(msgDiv);
+
+        // 先通过普通接口获取完整回复（保证兼容性）
+        fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: q })
+        })
+        .then(res => res.text())
+        .then(text => {
+            // 打字机效果：逐字显示
+            var idx = 0;
+            var timer = setInterval(function() {
+                if (idx <= text.length) {
+                    msgDiv.innerHTML = 'AI：' + text.substring(0, idx);
+                    document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
+                    idx++;
+                } else {
+                    clearInterval(timer);
+                }
+            }, 30);
+        })
+        .catch(function() {
+            msgDiv.innerHTML = 'AI：出错了';
+        });
+    }
+
+    // ===== 知识库管理 =====
+    function loadKnowledge() {
+        fetch('/knowledge')
+            .then(res => res.json())
+            .then(data => {
+                var html = '';
+                data.forEach(function(item) {
+                    html += '<div class="knowledge-item">'
+                        + '<span class="text">' + item.content + '</span>'
+                        + '<button class="del-btn" onclick="deleteKnowledge(' + item.id + ')">删除</button>'
+                        + '</div>';
+                });
+                document.getElementById('knowledgeList').innerHTML = html;
+                document.getElementById('countDisplay').innerHTML = data.length;
+            });
+    }
+
+    function addKnowledge() {
+        var input = document.getElementById('newKnowledge');
+        var content = input.value.trim();
+        if (!content) return;
+        fetch('/knowledge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content })
+        })
+        .then(res => res.json())
+        .then(function() {
+            input.value = '';
+            loadKnowledge();
+        });
+    }
+
+    function deleteKnowledge(id) {
+        if (!confirm('确定删除这条知识吗？')) return;
+        fetch('/knowledge/' + id, { method: 'DELETE' })
+            .then(function() { loadKnowledge(); });
+    }
+</script>
+</body>
+</html>

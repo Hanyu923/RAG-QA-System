@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# 运行时数据文件
+knowledge_data.txt
