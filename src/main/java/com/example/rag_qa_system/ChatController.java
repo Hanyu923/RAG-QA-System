@@ -2,6 +2,7 @@ package com.example.rag_qa_system;
 
   import com.fasterxml.jackson.databind.JsonNode;
   import com.fasterxml.jackson.databind.ObjectMapper;
+  import org.springframework.beans.factory.annotation.Value;
   import org.springframework.web.bind.annotation.*;
   import org.springframework.web.client.RestTemplate;
   import org.springframework.http.*;
@@ -10,7 +11,9 @@ package com.example.rag_qa_system;
   @RestController
   public class ChatController {
 
-      private static final String API_KEY = "your apikey";
+      @Value("${aliyun.api.key}")
+      private String apiKey;
+
       private static final String API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 
       private final DocumentSearchService docService;
@@ -25,7 +28,7 @@ package com.example.rag_qa_system;
 
           HttpHeaders headers = new HttpHeaders();
           headers.setContentType(MediaType.APPLICATION_JSON);
-          headers.set("Authorization", "Bearer " + API_KEY);
+          headers.set("Authorization", "Bearer " + apiKey);
 
           String question = request.get("question");
           String relevantDocs = docService.findRelevantContent(question);
