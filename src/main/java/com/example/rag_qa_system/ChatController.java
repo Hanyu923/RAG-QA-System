@@ -1,102 +1,79 @@
-package com.example.rag_qa_system;
+  package com.example.rag_qa_system;
 
-import jakarta.annotation.Resource;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+  import jakarta.annotation.Resource;
+  import org.slf4j.Logger;
+  import org.slf4j.LoggerFactory;
+  import org.springframework.ai.chat.client.ChatClient;
+  import org.springframework.ai.chat.messages.SystemMessage;
+  import org.springframework.ai.chat.messages.UserMessage;
+  import org.springframework.ai.chat.prompt.Prompt;
+  import org.springframework.data.redis.core.StringRedisTemplate;
+  import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
+  import java.util.List;
+  import java.util.Map;
+  import java.util.concurrent.TimeUnit;
 
-@RestController
-public class ChatController {
+  @RestController
+  public class ChatController {
 
-    @Resource
-    private ChatClient.Builder chatClientBuilder;
+      private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
-    @Resource
-    private AgentTools agentTools;
+      @Resource
+      private ChatClient.Builder chatClientBuilder;
 
-    @Resource(name = "stringRedisTemplate")
-    private StringRedisTemplate redisTemplate;
+      @Resource
+      private AgentTools agentTools;
 
-    private final DocumentSearchService docService;
+      @Resource(name = "stringRedisTemplate")
+      private StringRedisTemplate redisTemplate;
 
-    public ChatController(DocumentSearchService docService) {
-        this.docService = docService;
-    }
+      private final DocumentSearchService docService;
 
-    @PostMapping("/chat")
-    public String chat(@RequestBody Map<String, String> request) {
-        String question = request.get("question");
+      public ChatController(DocumentSearchService docService) {
+          this.docService = docService;
+      }
 
-        String cached = redisTemplate.opsForValue().get("chat:" + question);
-        if (cached != null) {
-            return cached;
-        }
+      @PostMapping("/chat")
+      public CommonResult<String> chat(@RequestBody Map<String, String> request) {
+          String question = request.get("question");
+          if (question == null || question.trim().isEmpty()) {
+              return CommonResult.error(40001, "问题不能为空");
+          }
+          question = question.trim();
 
-        String relevantDocs = docService.findRelevantContent(question);
+          // 查缓存
+          String cached = redisTemplate.opsForValue().get("chat:" + question);
+          if (cached != null) {
+              log.info("缓存命中: {}", question);
+              return CommonResult.success(cached);
+          }
 
-        String systemPrompt = "你是一个知识库助手。请根据以下资料回答问题。"
-                + "如果资料中没有答案，就说我暂时没有找到相关信息，不要瞎编。"
-                + "\n\n【资料】\n" + relevantDocs;
+          log.info("用户提问: {}", question);
 
-        Prompt prompt = new Prompt(List.of(
-                new SystemMessage(systemPrompt),
-                new UserMessage(question)
-        ));
-        String answer = chatClientBuilder
-                .defaultTools(agentTools)
-                .build()
-                .prompt(prompt)
-                .call()
-                .content();
+          String relevantDocs = docService.findRelevantContent(question);
 
-        if (answer == null) answer = "抱歉，暂时无法回答。";
+          String systemPrompt = "你是一个知识库助手。请根据以下资料回答问题。"
+                  + "如果资料中没有答案，就说我暂时没有找到相关信息，不要瞎编。"
+                  + "\n\n【资料】\n" + relevantDocs;
 
-        redisTemplate.opsForValue().set("chat:" + question, answer, 1, TimeUnit.HOURS);
+          Prompt prompt = new Prompt(List.of(
+                  new SystemMessage(systemPrompt),
+                  new UserMessage(question)
+          ));
+          String answer = chatClientBuilder
+                  .defaultTools(agentTools)
+                  .build()
+                  .prompt(prompt)
+                  .call()
+                  .content();
 
-        return answer;
-    }
+          if (answer == null) {
+              return CommonResult.error(50001, "AI 回复失败");
+          }
 
-    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatStream(@RequestBody Map<String, String> request) {
-        String question = request.get("question");
-        String relevantDocs = docService.findRelevantContent(question);
-
-        String systemPrompt = "你是一个知识库助手。请根据以下资料回答问题。"
-                + "如果资料中没有答案，就说我暂时没有找到相关信息，不要瞎编。"
-                + "\n\n【资料】\n" + relevantDocs;
-
-        Prompt prompt = new Prompt(List.of(
-                new SystemMessage(systemPrompt),
-                new UserMessage(question)
-        ));
-
-        SseEmitter emitter = new SseEmitter(0L);
-
-        chatClientBuilder.build()
-                .prompt(prompt)
-                .stream()
-                .content()
-                .subscribe(
-                        content -> {
-                            try {
-                                emitter.send(SseEmitter.event().data(content));
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        },
-                        error -> emitter.completeWithError(error),
-                        () -> emitter.complete()
-                );
-
-        return emitter;
-    }
-}
+          redisTemplate.opsForValue().set("chat:" + question, answer, 1, TimeUnit.HOURS);
+          log.info("AI回复成功，已缓存");
+          return CommonResult.success(answer);
+      }
+  }

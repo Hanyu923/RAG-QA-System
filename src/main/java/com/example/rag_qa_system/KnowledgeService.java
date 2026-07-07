@@ -1,5 +1,7 @@
 package com.example.rag_qa_system;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.io.*;
 import java.util.*;
@@ -8,19 +10,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Service
 public class KnowledgeService {
 
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeService.class);
+
     private final List<Knowledge> knowledgeList = new CopyOnWriteArrayList<>();
     private final String dataFile;
 
     public KnowledgeService() {
-        // 数据文件存在项目运行目录下
         dataFile = System.getProperty("user.dir") + "/knowledge_data.txt";
         loadFromFile();
     }
 
+    // ===== 从文件加载知识库 =====
     private void loadFromFile() {
         File file = new File(dataFile);
         if (!file.exists()) {
-            // 首次运行，从 classpath 的 knowledge.txt 复制
             try (InputStream is = getClass().getClassLoader().getResourceAsStream("knowledge.txt");
                  BufferedReader br = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
                 String line;
@@ -32,9 +35,9 @@ public class KnowledgeService {
                     }
                 }
                 saveToFile();
-                System.out.println("知识库初始化完成，共 " + knowledgeList.size() + " 条");
+                log.info("知识库初始化完成，共 {} 条", knowledgeList.size());
             } catch (Exception e) {
-                System.err.println("初始化知识库失败: " + e.getMessage());
+                log.error("初始化知识库失败", e);
             }
         } else {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
@@ -46,13 +49,14 @@ public class KnowledgeService {
                         knowledgeList.add(new Knowledge(id++, trimmed));
                     }
                 }
-                System.out.println("知识库加载完成，共 " + knowledgeList.size() + " 条");
+                log.info("知识库加载完成，共 {} 条", knowledgeList.size());
             } catch (Exception e) {
-                System.err.println("加载知识库失败: " + e.getMessage());
+                log.error("加载知识库失败", e);
             }
         }
     }
 
+    // ===== 保存知识库到文件 =====
     private void saveToFile() {
         try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(
                 new FileOutputStream(dataFile), "UTF-8"))) {
@@ -61,7 +65,7 @@ public class KnowledgeService {
                 bw.newLine();
             }
         } catch (Exception e) {
-            System.err.println("保存知识库失败: " + e.getMessage());
+            log.error("保存知识库失败", e);
         }
     }
 
@@ -88,6 +92,7 @@ public class KnowledgeService {
         return knowledgeList.stream().map(Knowledge::getContent).toList();
     }
 
+    // ===== 知识实体 =====
     public static class Knowledge {
         private int id;
         private String content;

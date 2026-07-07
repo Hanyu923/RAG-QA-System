@@ -1,6 +1,8 @@
 package com.example.rag_qa_system;
 
 import com.example.rag_qa_system.KnowledgeService.Knowledge;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,6 +12,8 @@ import java.util.Map;
 @RequestMapping("/knowledge")
 public class KnowledgeController {
 
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeController.class);
+
     private final KnowledgeService knowledgeService;
 
     public KnowledgeController(KnowledgeService knowledgeService) {
@@ -17,22 +21,29 @@ public class KnowledgeController {
     }
 
     @GetMapping
-    public List<Knowledge> list() {
-        return knowledgeService.getAll();
+    public CommonResult<List<Knowledge>> list() {
+        List<Knowledge> list = knowledgeService.getAll();
+        return CommonResult.success(list);
     }
 
     @PostMapping
-    public Knowledge add(@RequestBody Map<String, String> body) {
+    public CommonResult<Knowledge> add(@RequestBody Map<String, String> body) {
         String content = body.get("content");
         if (content == null || content.trim().isEmpty()) {
-            throw new RuntimeException("内容不能为空");
+            return CommonResult.error(40001, "内容不能为空");
         }
-        return knowledgeService.add(content.trim());
+        Knowledge k = knowledgeService.add(content.trim());
+        log.info("新增知识: {}", k.getContent());
+        return CommonResult.success(k);
     }
 
     @DeleteMapping("/{id}")
-    public String delete(@PathVariable int id) {
+    public CommonResult<String> delete(@PathVariable int id) {
         boolean ok = knowledgeService.delete(id);
-        return ok ? "删除成功" : "删除失败，未找到该知识";
+        if (ok) {
+            log.info("删除知识: id={}", id);
+            return CommonResult.success("删除成功");
+        }
+        return CommonResult.error(40004, "未找到该知识");
     }
 }

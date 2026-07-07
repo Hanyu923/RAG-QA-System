@@ -1,11 +1,15 @@
 package com.example.rag_qa_system;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.*;
 
 @Service
 public class DocumentSearchService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentSearchService.class);
 
     private List<String> sentences = new ArrayList<>();
     private List<List<Double>> sentenceVectors = new ArrayList<>();
@@ -22,22 +26,22 @@ public class DocumentSearchService {
 
     private void loadDocument() {
         sentences = knowledgeService.getAllContents();
-        System.out.println("文档加载完成，共 " + sentences.size() + " 条知识。");
+        log.info("文档加载完成，共 {} 条知识", sentences.size());
     }
 
     private void loadEmbeddings() {
         if (sentences.isEmpty()) return;
-        System.out.println("正在生成向量，共 " + sentences.size() + " 条，请稍候...");
+        log.info("正在生成向量，共 {} 条", sentences.size());
         for (int i = 0; i < sentences.size(); i++) {
             List<Double> vector = embeddingService.getEmbedding(sentences.get(i));
             if (vector != null) {
                 sentenceVectors.add(vector);
-                System.out.println("  - 第 " + (i + 1) + " 条向量生成完成");
+                log.info("第 {} 条向量生成完成", i + 1);
             } else {
-                System.out.println("  - 第 " + (i + 1) + " 条向量生成失败");
+                log.warn("第 {} 条向量生成失败", i + 1);
             }
         }
-        System.out.println("向量生成完成！");
+        log.info("向量生成完成");
     }
 
     public String findRelevantContent(String question) {
