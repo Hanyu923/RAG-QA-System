@@ -11,6 +11,9 @@
 - **流式输出** — 打字机效果逐字显示，提升交互体验
 - **Agent 工具调用** — AI 可自动调用工具（数学计算、日期查询等）
 - **Redis 缓存** — 热门问答缓存 1 小时，相同问题秒回
+- **统一异常处理** — 全局异常拦截，统一错误码返回
+- **参数校验** — 请求参数合法性校验，拒绝无效请求
+- **日志系统** — 基于 SLF4J + Logback 的日志记录，替代 System.out
 
 ## 运行截图
 
@@ -33,12 +36,14 @@
 
 ## 项目结构
 
-- `ChatController.java` — 对话接口 + 流式输出 + Redis 缓存
+- `ChatController.java` — 对话接口 + 参数校验 + Redis 缓存
 - `DocumentSearchService.java` — 向量知识库检索
 - `EmbeddingService.java` — Embedding API 调用
-- `KnowledgeService.java` — 知识库数据管理
 - `KnowledgeController.java` — 知识库增删接口
+- `KnowledgeService.java` — 知识库数据管理
 - `AgentTools.java` — AI Agent 工具（计算、日期等）
+- `CommonResult.java` — 统一响应格式
+- `GlobalExceptionHandler.java` — 全局异常处理
 - `knowledge.txt` — 初始知识库数据
 
 ## GitHub
