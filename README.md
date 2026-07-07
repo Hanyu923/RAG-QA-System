@@ -45,7 +45,3 @@
 - `CommonResult.java` — 统一响应格式
 - `GlobalExceptionHandler.java` — 全局异常处理
 - `knowledge.txt` — 初始知识库数据
-
-## GitHub
-
-github.com/Hanyu923/RAG-QA-System
