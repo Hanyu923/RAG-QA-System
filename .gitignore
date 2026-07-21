@@ -32,5 +32,8 @@ build/
 ### VS Code ###
 .vscode/
 
+# 配置文件（含 API Key，用 application.properties.example 做模板）
+application.properties
+
 # 运行时数据文件
 knowledge_data.txt

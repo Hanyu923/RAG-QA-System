@@ -2,14 +2,21 @@ package com.example.rag_qa_system;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 import java.util.*;
 
+/**
+ * Embedding 服务 — 调用阿里云 DashScope API 将文本转为向量
+ */
 @Service
 public class EmbeddingService {
 
@@ -22,9 +29,19 @@ public class EmbeddingService {
     private String model;
 
     private static final String EMBEDDING_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings";
-    private static final RestTemplate restTemplate = new RestTemplate();
     private static final ObjectMapper mapper = new ObjectMapper();
 
+    private RestTemplate restTemplate;
+
+    @PostConstruct
+    private void init() {
+        restTemplate = new RestTemplateBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .readTimeout(Duration.ofSeconds(30))
+                .build();
+    }
+
+    /** 调用 API 获取文本的 Embedding 向量 */
     public List<Double> getEmbedding(String text) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -52,6 +69,7 @@ public class EmbeddingService {
         }
     }
 
+    /** 计算两个向量的余弦相似度 */
     public static double cosineSimilarity(List<Double> vecA, List<Double> vecB) {
         double dotProduct = 0.0, normA = 0.0, normB = 0.0;
         for (int i = 0; i < vecA.size(); i++) {

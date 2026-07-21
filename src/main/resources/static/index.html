@@ -4,19 +4,26 @@
     <meta charset="UTF-8">
     <title>RAG 智能问答系统</title>
     <style>
+        /* 全局样式 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; max-width: 700px; margin: 30px auto; padding: 20px; }
+
+        /* 标签页切换 */
         .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #0066cc; }
         .tab { padding: 10px 24px; cursor: pointer; border: none; background: #f0f0f0; font-size: 15px; border-radius: 6px 6px 0 0; }
         .tab.active { background: #0066cc; color: white; }
         .tab:hover { background: #ddd; }
         .tab.active:hover { background: #0066cc; }
+
+        /* 聊天面板 */
         #chatBox { border: 1px solid #ddd; height: 350px; overflow-y: auto; padding: 15px; margin-bottom: 15px; border-radius: 8px; background: #fafafa; }
         .msg-user { color: #0066cc; margin-bottom: 8px; text-align: right; }
         .msg-ai { color: #333; background: #e8f5e9; padding: 8px 14px; border-radius: 8px; margin-bottom: 8px; display: inline-block; max-width: 85%; }
         .input-row { display: flex; gap: 10px; }
         .input-row input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
         .input-row button { padding: 10px 24px; border: none; background: #0066cc; color: white; border-radius: 6px; cursor: pointer; font-size: 14px; }
+
+        /* 知识库管理面板 */
         #knowledgeBox { display: none; }
         .knowledge-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 6px; }
         .knowledge-item .text { flex: 1; }
@@ -44,7 +51,7 @@
 </div>
 
 <div id="knowledgeBox">
-    <div class="info">知识库共 <span id="countDisplay">0</span> 条（添加后需重启服务才能更新检索）</div>
+    <div class="info">知识库共 <span id="countDisplay">0</span> 条（新增或删除后自动重建检索索引）</div>
     <div class="knowledge-list" id="knowledgeList"></div>
     <div class="add-row">
         <input type="text" id="newKnowledge" placeholder="输入新知识内容..." onkeydown="if(event.key==='Enter')addKnowledge()" />
@@ -53,7 +60,14 @@
 </div>
 
 <script>
-    // ===== 标签切换 =====
+    /** 转义 HTML 标签，防止 XSS */
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    // ===== 标签页切换 =====
     function switchTab(tab) {
         document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
         if (tab === 'chat') {
@@ -68,11 +82,11 @@
         }
     }
 
-    // ===== AI 对话 =====
+    // ===== 发送提问 =====
     function ask() {
         var q = document.getElementById('question').value;
         if (!q) return;
-        document.getElementById('chatBox').innerHTML += '<div class="msg-user">你：' + q + '</div>';
+        document.getElementById('chatBox').innerHTML += '<div class="msg-user">你：' + escapeHtml(q) + '</div>';
         document.getElementById('question').value = '';
         var msgDiv = document.createElement('div');
         msgDiv.className = 'msg-ai';
@@ -88,9 +102,9 @@
         .then(function(data) {
             var msgs = document.querySelectorAll('#chatBox .msg-ai');
             if (data.code === 0) {
-                msgs[msgs.length - 1].innerHTML = 'AI：' + data.data;
+                msgs[msgs.length - 1].innerHTML = 'AI：' + escapeHtml(data.data);
             } else {
-                msgs[msgs.length - 1].innerHTML = 'AI：' + data.message;
+                msgs[msgs.length - 1].innerHTML = 'AI：' + escapeHtml(data.message);
             }
         })
         .catch(function() {
@@ -99,7 +113,7 @@
         });
     }
 
-    // ===== 知识库管理 =====
+    // ===== 知识库列表加载 =====
     function loadKnowledge() {
         fetch('/knowledge')
         .then(function(res) { return res.json(); })
@@ -109,7 +123,7 @@
             var html = '';
             list.forEach(function(item) {
                 html += '<div class="knowledge-item">'
-                    + '<span class="text">' + item.content + '</span>'
+                    + '<span class="text">' + escapeHtml(item.content) + '</span>'
                     + '<button class="del-btn" onclick="deleteKnowledge(' + item.id + ')">删除</button>'
                     + '</div>';
             });
@@ -118,6 +132,7 @@
         });
     }
 
+    // ===== 新增知识 =====
     function addKnowledge() {
         var input = document.getElementById('newKnowledge');
         var content = input.value.trim();
@@ -136,10 +151,14 @@
         });
     }
 
+    // ===== 删除知识 =====
     function deleteKnowledge(id) {
         if (!confirm('确定删除这条知识吗？')) return;
         fetch('/knowledge/' + id, { method: 'DELETE' })
-        .then(function() { loadKnowledge(); });
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.code === 0) loadKnowledge();
+        });
     }
 </script>
 </body>

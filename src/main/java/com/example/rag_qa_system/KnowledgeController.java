@@ -8,6 +8,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 知识库管理接口 — 知识条的查询、新增、删除
+ */
 @RestController
 @RequestMapping("/knowledge")
 public class KnowledgeController {
@@ -20,12 +23,14 @@ public class KnowledgeController {
         this.knowledgeService = knowledgeService;
     }
 
+    /** 获取全部知识 */
     @GetMapping
     public CommonResult<List<Knowledge>> list() {
         List<Knowledge> list = knowledgeService.getAll();
         return CommonResult.success(list);
     }
 
+    /** 新增知识 */
     @PostMapping
     public CommonResult<Knowledge> add(@RequestBody Map<String, String> body) {
         String content = body.get("content");
@@ -33,10 +38,10 @@ public class KnowledgeController {
             return CommonResult.error(40001, "内容不能为空");
         }
         Knowledge k = knowledgeService.add(content.trim());
-        log.info("新增知识: {}", k.getContent());
         return CommonResult.success(k);
     }
 
+    /** 删除知识 */
     @DeleteMapping("/{id}")
     public CommonResult<String> delete(@PathVariable int id) {
         boolean ok = knowledgeService.delete(id);

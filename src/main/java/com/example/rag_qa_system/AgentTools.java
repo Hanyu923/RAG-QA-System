@@ -7,13 +7,15 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * AI Agent 工具集 — AI 可自动调用的工具（计算、日期查询等）
+ */
 @Component
 public class AgentTools {
 
     @Tool(description = "计算数学表达式，比如加法、减法、乘法、除法")
     public String calculate(String expression) {
         try {
-            // 简单表达式求值（仅支持 + - * / 和括号）
             String expr = expression.replaceAll("\\s+", "");
             double result = evalSimple(expr);
             return expr + " = " + result;
@@ -32,6 +34,7 @@ public class AgentTools {
         return "当前时间：" + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 
+    /** 简易表达式求值，支持 + - * / 和括号 */
     private double evalSimple(String expr) {
         return new Object() {
             int pos = -1, ch;
